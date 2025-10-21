@@ -30,6 +30,14 @@ function loadVideo(id, src) {
 
 function switchVideo(id, src) {
   const player = document.getElementById(id + "-player");
+  const container = document.getElementById(id + "-container");
+  if (!container) return;
+
+  // height lock so that switching a video doesn't
+  // cause disorienting squeeze when video is replaced
+  const currentHeight = container.offsetHeight;
+  container.style.minHeight = currentHeight + "px";
+
   if (!player) {
     // switch will get called before load if the bottom
     // buttons are pressed first, before the thumbnail...
@@ -43,4 +51,8 @@ function switchVideo(id, src) {
   player.load();
   player.currentTime = t;
   if (wasPlaying) player.play();
+
+  player.onloadedmetadata = () => {
+    container.style.minHeight = "";
+  };
 }
