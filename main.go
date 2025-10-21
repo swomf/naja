@@ -5,15 +5,24 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"os/exec"
+	"path/filepath"
+	"runtime"
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 )
 
 type Video struct {
 	ID       string // for html
 	BaseName string
-	Versions []string // e.g. demo.mp4, demo_edit.mp4, demo-edit2.mp4 (grouped on '_' and '-')
+	// versions get grouped into collections based on on '_' and '-'
+	//
+	// e.g. demo.mp4, demo_edit.mp4, demo-edit2.mp4 -> baseMain is demo
+	// or a\_1.mp4, a\_2.mp4 -> baseMain is a
+	Versions    []string
+	ThumbSource string // mp4 used to generate base name .jpg
 }
 
 func main() {
@@ -32,17 +41,23 @@ func main() {
 	http.Handle("/web/", http.StripPrefix("/web/", http.FileServer(http.Dir("web"))))
 
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		err := tmpl.Execute(w, map[string]any{"Videos": videos})
-		if err != nil {
+		if err := tmpl.Execute(w, map[string]any{"Videos": videos}); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 		}
 	})
+
+	// TODO: perhaps ffmpeg parallelization is too ram-heavy?
+	err = generateThumbnails(videos, "video", "thumbnails", runtime.NumCPU())
+	if err != nil {
+		log.Println("couldnt print thumbnails (is ffmpeg in path?): ", err)
+	}
 
 	log.Println("serving at http://localhost:8080")
 	log.Fatal(http.ListenAndServe(":8080", nil))
 }
 
-// helper for grouping versions in collectVideos
+// helper for grouping versions in collectVideos.
+// returns text before the first '-' or '_'
 func splitBase(name string) string {
 	cut := len(name)
 	if i := strings.Index(name, "_"); i != -1 && i < cut {
@@ -85,12 +100,72 @@ func collectVideos(dir string) ([]Video, error) {
 		versions := versionCollection[base]
 		sort.Strings(versions) // sort the video versions in a collection
 
+		// for thumbnail source, use base.mp4 or first version in videos
+		// prefer base.mp4, otherwise first version
+		thumbSource := versions[0]
+		baseFile := base + ".mp4"
+		for _, v := range versions {
+			if v == baseFile {
+				thumbSource = v
+				break
+			}
+		}
+
 		videos = append(videos, Video{
-			ID:       "vid" + strconv.Itoa(i+1),
-			BaseName: base,
-			Versions: versions,
+			ID:          "vid" + strconv.Itoa(i+1),
+			BaseName:    base,
+			Versions:    versions,
+			ThumbSource: thumbSource,
 		})
 	}
 
 	return videos, nil
+}
+
+func generateThumbnails(videos []Video, videoDir, thumbDir string, jobs int) error {
+	if err := os.MkdirAll(thumbDir, 0o755); err != nil {
+		return err
+	}
+
+	semaphore := make(chan struct{}, jobs)
+	var wg sync.WaitGroup
+	var firstErr error
+	var mu sync.Mutex
+
+	for _, v := range videos {
+		out := filepath.Join(thumbDir, v.BaseName+".jpg")
+		if _, err := os.Stat(out); err == nil {
+			continue // don't regenerate an already existing thumbnail.jpg
+		}
+
+		wg.Add(1)
+		semaphore <- struct{}{}
+
+		go func(v Video) {
+			defer wg.Done()
+			defer func() { <-semaphore }()
+
+			cmd := exec.Command(
+				"ffmpeg",
+				"-hide_banner", "-loglevel", "error",
+				"-ss", "00:00:01",
+				"-i", filepath.Join(videoDir, v.ThumbSource),
+				"-vframes", "1",
+				"-q:v", "3",
+				out,
+			)
+
+			if err := cmd.Run(); err != nil {
+				// make sure firstErr writing isnt ub
+				mu.Lock()
+				if firstErr == nil {
+					firstErr = err
+				}
+				mu.Unlock()
+			}
+		}(v)
+	}
+
+	wg.Wait()
+	return firstErr
 }
