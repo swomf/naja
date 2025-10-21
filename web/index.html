@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Video Gallery</title>
+<style>
+body {
+  font-family: sans-serif;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1em;
+  background: #f5f5f5;
+  padding: 1em;
+  justify-content: center;
+}
+.card {
+  width: 320px;
+  background: white;
+  border-radius: 10px;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+  padding: 1em;
+  text-align: center;
+}
+.thumb {
+  width: 100%;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: transform 0.2s;
+}
+.thumb:hover { transform: scale(1.03); }
+.btn {
+  margin: 0.25em;
+  padding: 0.4em 1em;
+  border: none;
+  border-radius: 5px;
+  background: #0078d7;
+  color: white;
+  cursor: pointer;
+}
+.btn:hover { background: #005fa3; }
+</style>
+</head>
+<body>
+
+{{range .Videos}}
+  {{$vid := .}}
+  <div class="card" data-id="{{$vid.ID}}" data-basename="{{$vid.BaseName}}">
+    <h3>{{$vid.BaseName}}</h3>
+
+    <div class="video-container" id="{{$vid.ID}}-container">
+      <img src="/thumbnails/{{$vid.BaseName}}.jpg"
+           alt="{{$vid.BaseName}} thumbnail"
+           class="thumb"
+           data-action="load"
+           data-id="{{$vid.ID}}"
+           data-src="/video/{{index $vid.Versions 0}}" />
+    </div>
+
+    <div class="buttons">
+      {{range $vid.Versions}}
+        <button class="btn"
+                data-action="switch"
+                data-src="/video/{{.}}"
+                data-id="{{$vid.ID}}">
+          {{.}}
+        </button>
+      {{end}}
+    </div>
+  </div>
+{{end}}
+
+<script src="/web/index.js"></script>
+</body>
+</html>
