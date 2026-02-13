@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"html/template"
 	"log"
 	"net/http"
@@ -14,6 +15,13 @@ import (
 	"sync"
 )
 
+// Sometimes a video will have unusual underscore distributions that
+// naja cannot reason about. Associate the video title to its intended
+// collection in basename_overrides.json.
+var overrideBases = map[string]string{}
+
+const overrideBasesPath = "basename_overrides.json"
+
 type Video struct {
 	ID       string // for html
 	BaseName string
@@ -26,6 +34,8 @@ type Video struct {
 }
 
 func main() {
+	overrideBases = initBaseNameOverrides()
+
 	videos, err := collectVideos("video")
 	if err != nil {
 		log.Fatal(err)
@@ -49,16 +59,36 @@ func main() {
 	// TODO: perhaps ffmpeg parallelization is too ram-heavy?
 	err = generateThumbnails(videos, "video", "thumbnails", runtime.NumCPU())
 	if err != nil {
-		log.Println("couldnt print thumbnails (is ffmpeg in path?): ", err)
+		log.Println("warning: couldnt print thumbnails (is ffmpeg in path?): ", err)
 	}
 
 	log.Println("serving at http://localhost:8080")
 	log.Fatal(http.ListenAndServe(":8080", nil))
 }
 
+func initBaseNameOverrides() map[string]string {
+	cfg := make(map[string]string)
+	data, err := os.ReadFile(overrideBasesPath)
+	if err != nil {
+		log.Printf("warning: config file %q not found, continuing with empty config\n", overrideBasesPath)
+		return cfg
+	}
+
+	if err := json.Unmarshal(data, &cfg); err != nil {
+		log.Printf("warning: failed to parse %q: %v; continuing with empty config\n", overrideBasesPath, err)
+		return map[string]string{}
+	}
+	return cfg
+}
+
 // helper for grouping versions in collectVideos.
 // returns text before the first '-' or '_'
 func splitBase(name string) string {
+	val, ok := overrideBases[name]
+	if ok {
+		return val
+	}
+
 	cut := len(name)
 	if i := strings.Index(name, "_"); i != -1 && i < cut {
 		cut = i
