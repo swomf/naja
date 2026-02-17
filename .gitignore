@@ -1,4 +1,5 @@
-video/
+video/*
+!video/.gitkeep
 thumbnails/
 naja
 naja.exe
