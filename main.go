@@ -56,8 +56,9 @@ func main() {
 		}
 	})
 
-	// TODO: perhaps ffmpeg parallelization is too ram-heavy?
-	err = generateThumbnails(videos, "video", "thumbnails", runtime.NumCPU())
+	// excessive ffmpeg parallelization is perhaps too ram-heavy, so
+	// we divide logical cores by 1/2.
+	err = generateThumbnails(videos, "video", "thumbnails", runtime.NumCPU()/2)
 	if err != nil {
 		log.Println("warning: couldnt print thumbnails (is ffmpeg in path?): ", err)
 	}
@@ -184,6 +185,7 @@ func generateThumbnails(videos []Video, videoDir, thumbDir string, jobs int) err
 				"-q:v", "3",
 				out,
 			)
+			log.Print("[thumbnails] rendering for " + v.ThumbSource)
 
 			if err := cmd.Run(); err != nil {
 				// make sure firstErr writing isnt ub
