@@ -27,6 +27,8 @@ one can see the following card in localhost.
 
 One can create as many cards for as many version collections as needed.
 
+Btw `[`, `]`/`s` are switch shortcuts
+
 ## license
 
 GPLv3. Example art was created in Juggling Lab [1](https://jugglinglab.org/anim?pattern=(4x,4x);hands=(32,15)(10).(10)(32,15)) [2](https://jugglinglab.org/anim?pattern=(4x,4x);hands=(32,15)(10).(10)(32,15).;colors=mixed).
